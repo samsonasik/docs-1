@@ -69,7 +69,7 @@
                                         Reporters
                                     </a>
                                 </li>
-                                                            <li class="">
+                                                            <li class="active">
                                     <a href="https://kahlan.github.io/docs/pro-tips.html">
                                         Pro Tips
                                     </a>
@@ -79,7 +79,7 @@
                                         Kahlan-config.php
                                     </a>
                                 </li>
-                                                            <li class="active">
+                                                            <li class="">
                                     <a href="https://kahlan.github.io/docs/integration.html">
                                         Integration with popular frameworks
                                     </a>
@@ -102,89 +102,84 @@
 
                 
                 <section id="content" class="col-sm-offset-3 col-lg-offset-2 col-sm-9 col-lg-10">
-                    <h2 id="integration-with-popular-frameworks">Integration with popular frameworks</h2>
-<p>Kahlan relies on the Composer autoloader. As such, it is compatible with most frameworks. However a couple popular frameworks use their own autoloader, so you will need to add your namespaces to be autoloaded correctly in the test environment.</p>
-<p>You will need to configure your Kahlan config file to manually add to the Composer autoloader which are &quot;outside the composer scope&quot;.</p>
-<h3 id="working-with-a-psr-0-compatible-architecture">Working with a PSR-0 compatible architecture.</h3>
-<p>Let's take a situation where you have the following directories: <code>app/models/</code> and  <code>app/controllers/</code> and each one are respectively attached to the <code>Api\Models</code> and <code>Api\Controllers</code> namespaces. To autoload them with Kahlan you will need to manually add these PSR-4 namespaces in your <strong>kahlan-config.php</strong> config file:</p>
-<pre><code class="language-php">use Kahlan\Filter\Filters;
+                    <h2 id="pro-tips">Pro Tips</h2>
+<h3 id="use-the">Use the <code>--ff</code> option (fast fail)</h3>
+<p><code>--ff</code> is the fast fail option. If used, the test suite will be stopped as soon as a failing test occurs. You can also specify a number of &quot;allowed&quot; fails before stopping the process. For example:</p>
+<pre><code>./bin/kahlan --ff=3</code></pre>
+<p>will stop the process as soon as 3 specs <code>it</code> failed.</p>
+<h3 id="use">Use <code>--coverage</code> option</h3>
+<p>Kahlan has some built-in code coverage exporter (e.g. Coveralls &amp; Scrutinizer exporters) but it can also be used to generates some detailed code coverage report directly inside the console.</p>
+<p><strong><code>--coverage=&lt;integer&gt;</code></strong> will generates some code coverage summary depending on the passed integer.</p>
+<ul>
+<li>0: no coverage</li>
+<li>1: code coverage summary of the whole project</li>
+<li>2: code coverage summary detailed by namespaces</li>
+<li>3: code coverage summary detailed by classes</li>
+<li>4: code coverage summary detailed by methods</li>
+</ul>
+<p>However sometimes it's interesting to see in details all covered/uncovered lines. To achieve this, you can pass a string to the <code>--coverage</code> option.</p>
+<p><strong><code>--coverage=&lt;string&gt;</code></strong> will generates some detailed code coverage according to the specified namespace, class or method definition.</p>
+<p>Example:</p>
+<pre><code class="language-php">./bin/kahlan --coverage="Kahlan\Reporter\Coverage\Driver\Xdebug::stop()"</code></pre>
+<p><img src="img/warning.png" alt="warning" /> don't forget to correctly set the <code>--src</code> option if your source directory is not <code>src/</code>.</p>
+<p>Will give you the detailed code coverage of the <code>Xdebug::stop()</code> method.</p>
+<p><img src="assets/code_coverage.png" alt="code_coverage_example" /></p>
+<p><strong>Note:</strong>
+All available namespaces, classes or methods definitions can be extracted from a simple <code>--coverage=4</code> code coverage summary.</p>
+<p><strong>Note:</strong>
+You can use PHPDBG code coverage capabilities to generate code coverage report through the following command line:</p>
+<pre><code class="language-bash">phpdbg -qrr ./bin/kahlan --coverage</code></pre>
+<p>Warning: while 80% faster than Xdebug it's currently not as accurate as Xdebug and more prone to Fatal Errors.</p>
+<p><strong><code>--istanbul=&lt;file&gt;</code></strong></p>
+<p>You can also create an HTML Code Coverage report using istanbul like so:</p>
+<pre><code class="language-bash">npm install -g istanbul
+./bin/kahlan --istanbul="coverage.json"
+istanbul report</code></pre>
+<p>You'll find the HTML Code Coverage report in <code>coverage/lcov-report/index.html</code>.</p>
+<p><strong><code>--lcov=&lt;file&gt;</code></strong></p>
+<p>You can also use <code>genhtml</code> (from the <a href="http://ltp.sourceforge.net/coverage/lcov.php">lcov</a> package):</p>
+<pre><code class="language-bash">sudo apt-get install lcov
+mkdir lcov
+./bin/kahlan --lcov="lcov/coverage.info"
+cd lcov
+genhtml coverage.info</code></pre>
+<h3 id="injecting-variables-in-root-scope">Injecting variables in root scope</h3>
+<p>To inject some variables to all scopes (e.g. database connection, helpers, etc.) and make it available in all you specs, one solution is to configure you <code>kahlan-config.php</code> file like the following:</p>
+<pre><code class="language-php">Filter::register('registering.globals', function($chain) {
+    $root = $this-&gt;suite(); // The top most suite.
+    $root-&gt;global = 'MyVariable';
+    return $chain-&gt;next();
+});
 
-Filters::apply($this, 'namespaces', function($next) {
-  $this-&gt;autoloader()-&gt;addPsr4('Api\\Models\\', __DIR__ . '/app/models/');
-  $this-&gt;autoloader()-&gt;addPsr4('Api\\Controllers\\', __DIR__ . '/app/controllers/');
-  return $next();
-
+Filter::apply($this, 'run', 'registering.globals');</code></pre>
+<p>Then you can get it in any scopes like in the following:</p>
+<pre><code class="language-php">describe("My Spec", function() {
+    it("echoes the global", function() {
+        echo $this-&gt;global;
+    });
 });</code></pre>
-<h3 id="laravel">Laravel</h3>
-<p>To import all Laravel &quot;test facilities&quot; into Kahlan you can make use of <a href="https://github.com/jarektkaczyk/laravel-kahlan">this dedicated plugin</a>.</p>
-<h3 id="symfony">Symfony</h3>
-<p>To use Kahlan in a Symfony 2.7+ environment, you can use <a href="https://packagist.org/packages/elephantly/kahlan-bundle">elephantly/kahlan-bundle</a> (<a href="https://elephantly.github.io/kahlan-bundle/">GitHub documentation</a>).
-Symfony ServiceContainer is then available in your spec files and you just have to launch <code>php app/console kahlan:run</code> with usual options.</p>
-<h3 id="atom">Atom</h3>
-<p>You can now develop your kahlan tests in Atom with autocompletion thanks to <a href="https://github.com/elephantly/atom-kahlan">atom-kahlan</a>.
-Just go in your favorite editor's settings and install the package.</p>
-<h3 id="phalcon">Phalcon</h3>
-<p>When a class extends a built-in class (i.e. a non PHP class) it's not possible to stub parent class methods since they are not in PHP userland.</p>
-<p>Long story short, let's take the following example as an illustration:</p>
-<p>We have a model:</p>
-<pre><code class="language-php">namespace Api\Models;
-
-class MyModel extends \Phalcon\Mvc\Model
-{
-}</code></pre>
-<p>And we want <code>findFirst()</code> to return a stubbed result. This can be translated into the following spec:</p>
-<pre><code class="language-php">namespace Api\Spec\Contollers;
-
-use Api\Models\MyModel;
-
-describe("MyModel", function() {
-
-    it("stubs findFirst as an example", function() {
-
-        $article = new MyModel();
-
-        allow('Api\Models\MyModel')-&gt;toReceive('::findFirst')-&gt;andReturn($article);
-
-        $actual = MyModel::findFirst();
-
-        expect($actual)-&gt;toBe($article);
-
+<h3 id="use-the-focused-mode">Use the focused mode</h3>
+<p>When writing your tests sometimes you want to <strong>only execute</strong> the test(s) you are working on. For this, you can prefix your spec with an &quot;f&quot; like in the following example:</p>
+<pre><code class="language-php">describe("test focused mode", function() {
+    it("will be ignored", function() {
     });
 
+    it("will be ignored", function() {
+    });
+
+    fit("will be run", function() {
+    });
 });</code></pre>
-<p>Unfortunately it doesn't work out of the box because <code>MyModel</code> extends <code>Phalcon\Mvc\Model</code> which is a core class (i.e a class compiled from C sources). So <code>MyModel::findFirst()</code> doesn't exist in PHP userland and can't be stubbed.</p>
-<p>The workaround here is to add the Kahlan's <code>Layer</code> patcher in <a href="config-file.html">your <code>kahlan-config.php</code> file</a>. The <code>Layer</code> patcher will dynamically replace all <code>extends</code> done on core class to an intermediate layer class in PHP.</p>
-<p>So for our example above, the <code>Layer</code> patcher can be configured like the following in <a href="config-file.html">your <code>kahlan-config.php</code> file</a>:</p>
-<pre><code class="language-php">use Kahlan\Filter\Filters;
-use Kahlan\Jit\Patcher\Layer;
+<p>If you want to run a subset instead of a single test you can use <code>fdescribe</code> or <code>fcontext</code> instead.</p>
+<p><strong>Tip:</strong> combined with <code>--coverage=&lt;string&gt;</code> this is a powerful combo to see exactly what part of the code is covered for a subset of specs only.</p>
+<h3 id="comment-out-a-spec">Comment out a spec</h3>
+<p>To comment out a spec, you can use the <code>x</code> prefix i.e. <code>xdescribe</code>, <code>xcontext</code> or <code>xit</code>.</p>
+<h3 id="skip-a-spec">Skip a spec</h3>
+<p>To skip a spec you should use a <code>skipIf()</code> function inside of it. This function takes a boolean, that mean you can provide a conditions to skip this spec up. In example:</p>
+<pre><code class="language-php">it("should not run on weekends", function() {
+    skipIf(date("w") == 0 || date("w") == 6);
 
-Filters::apply($this, 'patchers', function($next) {
-    $this-&gt;autoloader()-&gt;patchers()-&gt;add('layer', new Layer([
-        'override' =&gt; [
-            'Phalcon\Mvc\Model' // apply a layer on top of all classes extending `Phalcon\Mvc\Model`.
-        ]
-    ]));
-
-    return $next();
-});</code></pre>
-<p><strong>Note:</strong> You will probably need to remove all cached files using <code>kahlan --cc</code>.</p>
-<h3 id="working-with-a-custom-autoloader-not-compatible-with-psr-0">Working with a custom autoloader not compatible with PSR-0.</h3>
-<p>If you need to load non PSR-0 compatible classes simply add &quot;composer/composer&quot;: &quot;^1.2&quot; in your require-dev section and use Composer\Autoload\ClassMapGenerator; in your kahlan config file to generate a class map. For example, when you need to use it in <a href="https://codeigniter.com/">CodeIgniter &lt;=3.1.2</a>, you can do the following:</p>
-<pre><code class="language-php">use Kahlan\Filter\Filters;
-use Composer\Autoload\ClassMapGenerator;
-
-Filters::apply($this, 'namespaces', function($next) {
-    $this-&gt;autoloader()-&gt;addClassMap(
-        ClassMapGenerator::createMap(BASEPATH . 'core')
-    );
-    $this-&gt;autoloader()-&gt;addClassMap(
-        ClassMapGenerator::createMap(APPPATH . 'controllers')
-    );
-    $this-&gt;autoloader()-&gt;addClassMap(
-        ClassMapGenerator::createMap(APPPATH . 'models')
-    );
-
-    return $next();
+    expect(true)-&gt;toBe(true);
 });</code></pre>
                 </section>
 

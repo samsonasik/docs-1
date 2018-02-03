@@ -64,7 +64,7 @@
                                         CLI Options
                                     </a>
                                 </li>
-                                                            <li class="">
+                                                            <li class="active">
                                     <a href="https://kahlan.github.io/docs/reporters.html">
                                         Reporters
                                     </a>
@@ -79,7 +79,7 @@
                                         Kahlan-config.php
                                     </a>
                                 </li>
-                                                            <li class="active">
+                                                            <li class="">
                                     <a href="https://kahlan.github.io/docs/integration.html">
                                         Integration with popular frameworks
                                     </a>
@@ -102,90 +102,99 @@
 
                 
                 <section id="content" class="col-sm-offset-3 col-lg-offset-2 col-sm-9 col-lg-10">
-                    <h2 id="integration-with-popular-frameworks">Integration with popular frameworks</h2>
-<p>Kahlan relies on the Composer autoloader. As such, it is compatible with most frameworks. However a couple popular frameworks use their own autoloader, so you will need to add your namespaces to be autoloaded correctly in the test environment.</p>
-<p>You will need to configure your Kahlan config file to manually add to the Composer autoloader which are &quot;outside the composer scope&quot;.</p>
-<h3 id="working-with-a-psr-0-compatible-architecture">Working with a PSR-0 compatible architecture.</h3>
-<p>Let's take a situation where you have the following directories: <code>app/models/</code> and  <code>app/controllers/</code> and each one are respectively attached to the <code>Api\Models</code> and <code>Api\Controllers</code> namespaces. To autoload them with Kahlan you will need to manually add these PSR-4 namespaces in your <strong>kahlan-config.php</strong> config file:</p>
-<pre><code class="language-php">use Kahlan\Filter\Filters;
+                    <h2 id="reporters">Reporters</h2>
+<p>Kahlan provides a flexible reporter system which can be extended easily.</p>
+<p>There are three build-in reporters and the default is the dotted one:</p>
+<pre><code class="language-php">./bin/kahlan --reporter=dot # Default value</code></pre>
+<p>You can optionally export reporter output to a file</p>
+<pre><code class="language-php">./bin/kahlan --reporter=dot:/some/file/path.txt</code></pre>
+<p>You can also use multiple reporters e.g.:</p>
+<pre><code class="language-php">./bin/kahlan --reporter=dot --reporter=json:/some/file/path.json</code></pre>
+<p>It can be pretty handy to do multiple reports at the same time.</p>
+<p>Note: don't use more than one reporter as console reporter otherwise the console outputs will be mixed altogether.</p>
+<p>To use a reporter which looks like more a progress bar use the following option:</p>
+<pre><code class="language-php">./bin/kahlan --reporter=bar
+./bin/kahlan --reporter=verbose</code></pre>
+<p>You can easily roll you own if these reporters don't fit your needs.</p>
+<p>For example, if you want a console based reporter, create a PHP class which extends <code>Kahlan\Reporter\Terminal</code>. The <code>Terminal</code> class offers some useful methods like <code>write()</code> for doing some echos on the terminal. But if you wanted to create some kind of JSON reporter extending from <code>Kahlan\Reporter\Reporter</code> would be enough.</p>
+<p>Example of a custom console reporter:</p>
+<pre><code class="language-php">&lt;?php
+namespace My\Namespace;
 
-Filters::apply($this, 'namespaces', function($next) {
-  $this-&gt;autoloader()-&gt;addPsr4('Api\\Models\\', __DIR__ . '/app/models/');
-  $this-&gt;autoloader()-&gt;addPsr4('Api\\Controllers\\', __DIR__ . '/app/controllers/');
-  return $next();
-
-});</code></pre>
-<h3 id="laravel">Laravel</h3>
-<p>To import all Laravel &quot;test facilities&quot; into Kahlan you can make use of <a href="https://github.com/jarektkaczyk/laravel-kahlan">this dedicated plugin</a>.</p>
-<h3 id="symfony">Symfony</h3>
-<p>To use Kahlan in a Symfony 2.7+ environment, you can use <a href="https://packagist.org/packages/elephantly/kahlan-bundle">elephantly/kahlan-bundle</a> (<a href="https://elephantly.github.io/kahlan-bundle/">GitHub documentation</a>).
-Symfony ServiceContainer is then available in your spec files and you just have to launch <code>php app/console kahlan:run</code> with usual options.</p>
-<h3 id="atom">Atom</h3>
-<p>You can now develop your kahlan tests in Atom with autocompletion thanks to <a href="https://github.com/elephantly/atom-kahlan">atom-kahlan</a>.
-Just go in your favorite editor's settings and install the package.</p>
-<h3 id="phalcon">Phalcon</h3>
-<p>When a class extends a built-in class (i.e. a non PHP class) it's not possible to stub parent class methods since they are not in PHP userland.</p>
-<p>Long story short, let's take the following example as an illustration:</p>
-<p>We have a model:</p>
-<pre><code class="language-php">namespace Api\Models;
-
-class MyModel extends \Phalcon\Mvc\Model
+class MyReporter extends \Kahlan\Reporter\Terminal
 {
-}</code></pre>
-<p>And we want <code>findFirst()</code> to return a stubbed result. This can be translated into the following spec:</p>
-<pre><code class="language-php">namespace Api\Spec\Contollers;
+    /**
+     * Callback called after a spec execution.
+     *
+     * @param object $log The log object of the whole spec.
+     */
+    public function specEnd($log = null)
+    {
+        switch($log-&gt;type()) {
+            case 'passed':
+                $this-&gt;write('✓', "green");
+            break;
+            case 'skipped':
+                $this-&gt;_write('S');
+            break;
+            case 'pending':
+                $this-&gt;_write('P', 'cyan');
+            break;
+            case 'excluded':
+                $this-&gt;_write('X', 'yellow');
+            break;
+            case 'failed':
+                '☠', "red");
+                $this-&gt;write("\n");
+                $this-&gt;_report($log);
+            break;
+            case 'errored':
+                $this-&gt;write('☠', "magenta");
+                $this-&gt;write("\n");
+                $this-&gt;_report($log);
+            break;
+        }
+    }
 
-use Api\Models\MyModel;
+    /**
+     * Callback called at the end of specs processing.
+     *
+     * @param object $summary The execution summary instance.
+     */
+    public function end($summary)
+    {
+        $this-&gt;write('total:' . $summary-&gt;total() . "\n");
+        $this-&gt;write('passed:' . $summary-&gt;passed() . "\n");
+        $this-&gt;write('pending:' . $summary-&gt;pending() . "\n");
+        $this-&gt;write('skipped:' . $summary-&gt;skipped() . "\n");
+        $this-&gt;write('excluded:' . $summary-&gt;excluded() . "\n");
+        $this-&gt;write('failed:' . $summary-&gt;failed() . "\n");
+        $this-&gt;write('errored:'. $summary-&gt;errored() . "\n");
+    }
+}
+?&gt;</code></pre>
+<p><strong>Note:</strong> <code>_report()</code> is an inherited method. Its role is to print a report of passed log as parameter. Feel free to dig into the source code if you want some more specific output for that.</p>
+<p>The next step is to register your new reporter so you'll need to create you own custom <a href="config-file.html">config file</a>).</p>
+<p>Example of config file:</p>
+<pre><code class="language-php">&lt;?php
+use Kahlan\Filter\Filter;
+use My\Namespace\Reporter\MyReporter;
 
-describe("MyModel", function() {
+// The logic to inlude into the workflow.
+Filter::register('kahlan.myconsole', function($chain) {
+    $reporters = $this-&gt;reporters();
+    $reporters-&gt;add('myconsole', new MyReporter(['start' =&gt; $this-&gt;_start));
+});
 
-    it("stubs findFirst as an example", function() {
-
-        $article = new MyModel();
-
-        allow('Api\Models\MyModel')-&gt;toReceive('::findFirst')-&gt;andReturn($article);
-
-        $actual = MyModel::findFirst();
-
-        expect($actual)-&gt;toBe($article);
-
-    });
-
-});</code></pre>
-<p>Unfortunately it doesn't work out of the box because <code>MyModel</code> extends <code>Phalcon\Mvc\Model</code> which is a core class (i.e a class compiled from C sources). So <code>MyModel::findFirst()</code> doesn't exist in PHP userland and can't be stubbed.</p>
-<p>The workaround here is to add the Kahlan's <code>Layer</code> patcher in <a href="config-file.html">your <code>kahlan-config.php</code> file</a>. The <code>Layer</code> patcher will dynamically replace all <code>extends</code> done on core class to an intermediate layer class in PHP.</p>
-<p>So for our example above, the <code>Layer</code> patcher can be configured like the following in <a href="config-file.html">your <code>kahlan-config.php</code> file</a>:</p>
-<pre><code class="language-php">use Kahlan\Filter\Filters;
-use Kahlan\Jit\Patcher\Layer;
-
-Filters::apply($this, 'patchers', function($next) {
-    $this-&gt;autoloader()-&gt;patchers()-&gt;add('layer', new Layer([
-        'override' =&gt; [
-            'Phalcon\Mvc\Model' // apply a layer on top of all classes extending `Phalcon\Mvc\Model`.
-        ]
-    ]));
-
-    return $next();
-});</code></pre>
-<p><strong>Note:</strong> You will probably need to remove all cached files using <code>kahlan --cc</code>.</p>
-<h3 id="working-with-a-custom-autoloader-not-compatible-with-psr-0">Working with a custom autoloader not compatible with PSR-0.</h3>
-<p>If you need to load non PSR-0 compatible classes simply add &quot;composer/composer&quot;: &quot;^1.2&quot; in your require-dev section and use Composer\Autoload\ClassMapGenerator; in your kahlan config file to generate a class map. For example, when you need to use it in <a href="https://codeigniter.com/">CodeIgniter &lt;=3.1.2</a>, you can do the following:</p>
-<pre><code class="language-php">use Kahlan\Filter\Filters;
-use Composer\Autoload\ClassMapGenerator;
-
-Filters::apply($this, 'namespaces', function($next) {
-    $this-&gt;autoloader()-&gt;addClassMap(
-        ClassMapGenerator::createMap(BASEPATH . 'core')
-    );
-    $this-&gt;autoloader()-&gt;addClassMap(
-        ClassMapGenerator::createMap(APPPATH . 'controllers')
-    );
-    $this-&gt;autoloader()-&gt;addClassMap(
-        ClassMapGenerator::createMap(APPPATH . 'models')
-    );
-
-    return $next();
-});</code></pre>
+// Apply our logic to the `'console'` entry point.
+Filter::apply($this, 'console', 'kahlan.myconsole');
+?&gt;</code></pre>
+<p><code>$this-&gt;_start</code> is the timestamp in micro seconds of when the process has been started. If passed to reporter, it'll be able to display an accurate execution time.</p>
+<p><strong>Note:</strong> <code>'myconsole'</code> is an arbitrary name, it can be anything.</p>
+<p>Let's run it:</p>
+<pre><code class="language-php">./bin/kahlan --config=my-config.php</code></pre>
+<p><img src="assets/custom_reporter.png" alt="custom_reporter" /></p>
+<p>A bit ugly, but the check marks and the skulls are present.</p>
                 </section>
 
             </div>

@@ -74,12 +74,12 @@
                                         Pro Tips
                                     </a>
                                 </li>
-                                                            <li class="">
+                                                            <li class="active">
                                     <a href="https://kahlan.github.io/docs/config-file.html">
                                         Kahlan-config.php
                                     </a>
                                 </li>
-                                                            <li class="active">
+                                                            <li class="">
                                     <a href="https://kahlan.github.io/docs/integration.html">
                                         Integration with popular frameworks
                                     </a>
@@ -102,90 +102,88 @@
 
                 
                 <section id="content" class="col-sm-offset-3 col-lg-offset-2 col-sm-9 col-lg-10">
-                    <h2 id="integration-with-popular-frameworks">Integration with popular frameworks</h2>
-<p>Kahlan relies on the Composer autoloader. As such, it is compatible with most frameworks. However a couple popular frameworks use their own autoloader, so you will need to add your namespaces to be autoloaded correctly in the test environment.</p>
-<p>You will need to configure your Kahlan config file to manually add to the Composer autoloader which are &quot;outside the composer scope&quot;.</p>
-<h3 id="working-with-a-psr-0-compatible-architecture">Working with a PSR-0 compatible architecture.</h3>
-<p>Let's take a situation where you have the following directories: <code>app/models/</code> and  <code>app/controllers/</code> and each one are respectively attached to the <code>Api\Models</code> and <code>Api\Controllers</code> namespaces. To autoload them with Kahlan you will need to manually add these PSR-4 namespaces in your <strong>kahlan-config.php</strong> config file:</p>
-<pre><code class="language-php">use Kahlan\Filter\Filters;
+                    <h2 id="the">The <code>kahlan-config.php</code> file</h2>
+<p>If you want to set some default options, change the execution workflow or load some custom plugins at a bootstrap level, you will need to setup you own config file.</p>
+<p>Kahlan attempts to load the <code>kahlan-config.php</code> file from the current directory as the default config file. However you can define your own path using the <code>--config=myconfigfile.php</code> option in the command line. Custom <code>--config</code> can be useful if you want to use some specific configuration for Travis or something else.</p>
+<p>Example of a config file:</p>
+<pre><code class="language-php">&lt;?php
+use Kahlan\Filter\Filter;
+use Kahlan\Reporter\Coverage\Exporter\Coveralls;
 
-Filters::apply($this, 'namespaces', function($next) {
-  $this-&gt;autoloader()-&gt;addPsr4('Api\\Models\\', __DIR__ . '/app/models/');
-  $this-&gt;autoloader()-&gt;addPsr4('Api\\Controllers\\', __DIR__ . '/app/controllers/');
-  return $next();
+// It overrides some default option values.
+// Note that the values passed in command line will overwrite the ones below.
+$commandLine = $this-&gt;commandLine();
+$commandLine-&gt;option('ff', 'default', 1);
+$commandLine-&gt;option('coverage', 'default', 3);
+$commandLine-&gt;option('coverage-scrutinizer', 'default', 'scrutinizer.xml');
+$commandLine-&gt;option('coverage-coveralls', 'default', 'coveralls.json');
 
-});</code></pre>
-<h3 id="laravel">Laravel</h3>
-<p>To import all Laravel &quot;test facilities&quot; into Kahlan you can make use of <a href="https://github.com/jarektkaczyk/laravel-kahlan">this dedicated plugin</a>.</p>
-<h3 id="symfony">Symfony</h3>
-<p>To use Kahlan in a Symfony 2.7+ environment, you can use <a href="https://packagist.org/packages/elephantly/kahlan-bundle">elephantly/kahlan-bundle</a> (<a href="https://elephantly.github.io/kahlan-bundle/">GitHub documentation</a>).
-Symfony ServiceContainer is then available in your spec files and you just have to launch <code>php app/console kahlan:run</code> with usual options.</p>
-<h3 id="atom">Atom</h3>
-<p>You can now develop your kahlan tests in Atom with autocompletion thanks to <a href="https://github.com/elephantly/atom-kahlan">atom-kahlan</a>.
-Just go in your favorite editor's settings and install the package.</p>
-<h3 id="phalcon">Phalcon</h3>
-<p>When a class extends a built-in class (i.e. a non PHP class) it's not possible to stub parent class methods since they are not in PHP userland.</p>
-<p>Long story short, let's take the following example as an illustration:</p>
-<p>We have a model:</p>
-<pre><code class="language-php">namespace Api\Models;
+// The logic to include into the workflow.
+Filter::register('kahlan.coveralls', function($chain) {
 
-class MyModel extends \Phalcon\Mvc\Model
-{
-}</code></pre>
-<p>And we want <code>findFirst()</code> to return a stubbed result. This can be translated into the following spec:</p>
-<pre><code class="language-php">namespace Api\Spec\Contollers;
+    // Get the reporter called `'coverage'` from the list of reporters
+    $reporter = $this-&gt;reporters()-&gt;get('coverage');
 
-use Api\Models\MyModel;
+    // Abort if no coverage is available.
+    if (!$reporter || !$this-&gt;commandLine()-&gt;exists('coverage-coveralls')) {
+        return $chain-&gt;next();
+    }
 
-describe("MyModel", function() {
+    // Use the `Coveralls` class to write the JSON coverage into a file
+    Coveralls::write([
+        'collector' =&gt; $reporter,
+        'file' =&gt; $this-&gt;commandLine()-&gt;get('coverage-coveralls'),
+        'service_name' =&gt; 'travis-ci',
+        'service_job_id' =&gt; getenv('TRAVIS_JOB_ID') ?: null
+    ]);
 
-    it("stubs findFirst as an example", function() {
+    // Continue the chain
+    return $chain-&gt;next();
+});
 
-        $article = new MyModel();
-
-        allow('Api\Models\MyModel')-&gt;toReceive('::findFirst')-&gt;andReturn($article);
-
-        $actual = MyModel::findFirst();
-
-        expect($actual)-&gt;toBe($article);
-
-    });
-
-});</code></pre>
-<p>Unfortunately it doesn't work out of the box because <code>MyModel</code> extends <code>Phalcon\Mvc\Model</code> which is a core class (i.e a class compiled from C sources). So <code>MyModel::findFirst()</code> doesn't exist in PHP userland and can't be stubbed.</p>
-<p>The workaround here is to add the Kahlan's <code>Layer</code> patcher in <a href="config-file.html">your <code>kahlan-config.php</code> file</a>. The <code>Layer</code> patcher will dynamically replace all <code>extends</code> done on core class to an intermediate layer class in PHP.</p>
-<p>So for our example above, the <code>Layer</code> patcher can be configured like the following in <a href="config-file.html">your <code>kahlan-config.php</code> file</a>:</p>
-<pre><code class="language-php">use Kahlan\Filter\Filters;
-use Kahlan\Jit\Patcher\Layer;
-
-Filters::apply($this, 'patchers', function($next) {
-    $this-&gt;autoloader()-&gt;patchers()-&gt;add('layer', new Layer([
-        'override' =&gt; [
-            'Phalcon\Mvc\Model' // apply a layer on top of all classes extending `Phalcon\Mvc\Model`.
-        ]
-    ]));
-
-    return $next();
-});</code></pre>
-<p><strong>Note:</strong> You will probably need to remove all cached files using <code>kahlan --cc</code>.</p>
-<h3 id="working-with-a-custom-autoloader-not-compatible-with-psr-0">Working with a custom autoloader not compatible with PSR-0.</h3>
-<p>If you need to load non PSR-0 compatible classes simply add &quot;composer/composer&quot;: &quot;^1.2&quot; in your require-dev section and use Composer\Autoload\ClassMapGenerator; in your kahlan config file to generate a class map. For example, when you need to use it in <a href="https://codeigniter.com/">CodeIgniter &lt;=3.1.2</a>, you can do the following:</p>
-<pre><code class="language-php">use Kahlan\Filter\Filters;
-use Composer\Autoload\ClassMapGenerator;
-
-Filters::apply($this, 'namespaces', function($next) {
-    $this-&gt;autoloader()-&gt;addClassMap(
-        ClassMapGenerator::createMap(BASEPATH . 'core')
-    );
-    $this-&gt;autoloader()-&gt;addClassMap(
-        ClassMapGenerator::createMap(APPPATH . 'controllers')
-    );
-    $this-&gt;autoloader()-&gt;addClassMap(
-        ClassMapGenerator::createMap(APPPATH . 'models')
-    );
-
-    return $next();
-});</code></pre>
+// Apply the logic to the `'reporting'` entry point.
+Filter::apply($this, 'reporting', 'kahlan.coveralls');
+?&gt;</code></pre>
+<p>Above <code>'kahlan.coveralls'</code> is a custom name and could be anything so long as <code>Filter::register()</code> and <code>Filter::apply()</code> are named consistently.</p>
+<p>See <a href="https://github.com/kahlan/kahlan/blob/3.1.14/kahlan-config.travis.php"><code>kahlan-config.travis.php</code></a> for a more complete configuration example.</p>
+<p><code>$this</code> refer to the Kahlan instance so <code>$this-&gt;reporters()-&gt;get('coverage')</code> will give you the instance of the coverage reporter. This coverage reporter will contain all raw data which is passed to the <code>Coveralls</code> exporter to be formatter.</p>
+<p>The filterable entry points are the following:</p>
+<ul>
+<li><code>'workflow</code>'           # The one to rule them all
+<ul>
+<li><code>'interceptor</code>'      # Operations on the autoloader</li>
+<li><code>'namespaces</code>'       # Adds some namespaces not managed by composer (like <code>spec</code>)</li>
+<li><code>'patchers</code>'         # Adds patchers</li>
+<li><code>'loadSpecs</code>'        # Loads specs</li>
+<li><code>'reporters</code>'        # Adds reporters</li>
+<li><code>'console'</code>        # Creates the console reporter</li>
+<li><code>'coverage'</code>       # Creates the coverage reporter</li>
+<li><code>'matchers</code>'         # Useful for registering some further matchers</li>
+<li><code>'run</code>'              # Runs the test suite</li>
+<li><code>'reporting</code>'        # Runs some additional reporting tasks</li>
+<li><code>'stop</code>'             # Trigger the stop event to reporters</li>
+<li><code>'quit</code>'             # For some additional post processing before quitting</li>
+</ul></li>
+</ul>
+<p><a href="https://github.com/kahlan/kahlan/blob/master/src/Cli/Kahlan.php">You can see more details about how the workflow works here</a> (start reading with the <code>run()</code> method).</p>
+<h3 id="optimizations">Optimizations</h3>
+<p>Kahlan acts like a wrapper. It intercepts loaded classes Just It Time (i.e. during the autoloading step) and rewrites the source code on the fly to make it easily testable with PHP. That's why Monkey Patching or redefining a class's method can be done inside the testing environment without any PECL extensions like runkit, aop, etc.</p>
+<p>Notice that this approach will make your code run a bit slower. However you can optimize Kahlan's interceptor to only patch the namespaces you want.</p>
+<p>For example, the following configuration will only limit the patching to a set of namespaces/classes:</p>
+<pre><code class="language-php">$this-&gt;commandLine()-&gt;set('include', [
+    'myapp',
+    'lithium',
+    'li3_zendserver\data\Job',
+    'AuthorizeNetCIM'
+]);</code></pre>
+<p>Conversely you can exclude some external dependencies to improve performance if you don't intend to Monkey Patch/Stub some namespaces/classes:</p>
+<pre><code class="language-php">$this-&gt;commandLine()-&gt;set('exclude', [
+    'Symfony',
+    'Doctrine'
+]);</code></pre>
+<p>Finally, you can disable all the patching if you prefer to deal with DI only and are not interested by Kahlan's features:</p>
+<pre><code class="language-php">$this-&gt;commandLine()-&gt;set('include', []);</code></pre>
+<p><strong>Note:</strong> You will still able to stub instances and classes created with <code>Double::instance()</code>/<code>Double::classname()</code>.</p>
                 </section>
 
             </div>
